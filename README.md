@@ -1,2 +1,2 @@
 # maizena
-C++ DaZeus something
+C++ DaZeus something bindings.
