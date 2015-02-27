@@ -2,6 +2,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/use_future.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/numeric/conversion/cast.hpp>
 
 #include <array>
 #include <iostream>
@@ -20,7 +21,12 @@ using namespace boost;
 using namespace asio;
 using namespace ip;
 
-struct dapi {
+struct rawdapi {
+	rawdapi(io_service& servi, tcp::socket& socki)
+	: service(servi)
+	, socket(socki)
+	{}
+
 	io_service& service;
 	tcp::socket& socket;
 
@@ -54,7 +60,7 @@ struct dapi {
 		auto& x = msg.data;
 		x = lexical_cast<string>(x.size()) + x;
 
-		async_write(socket, buffer(x), [this, it = msg.promise_it](auto ec, auto length){
+		async_write(socket, buffer(x), [this, it = msg.promise_it](auto ec, auto /*length*/){
 			if(!ec){
 				outgoing.pop();
 				if(!outgoing.empty()){
@@ -77,14 +83,14 @@ struct dapi {
 	}
 
 	void do_read(){
-		current_incoming.assign(5, 0);
+		current_incoming.assign(1024, 0);
 		async_read(socket, buffer(current_incoming), transfer_at_least(4), [this](auto ec, auto read_bytes){
 			if(ec){
 				abandon_ship();
 				return;
 			}
 
-			auto const end_of_bytes = current_incoming.begin() + read_bytes;
+			auto const end_of_bytes = current_incoming.begin() + numeric_cast<int>(read_bytes);
 
 			auto const end_of_size = find_if_not(current_incoming.begin(), end_of_bytes, &::isdigit);
 			string const size_string(current_incoming.begin(), end_of_size);
@@ -97,8 +103,8 @@ struct dapi {
 			if(theres_more){
 				const auto remaining = total_bytes - read_message_bytes + 1;
 				current_incoming.assign(remaining, 0);
-				auto read_bytes = read(socket, buffer(current_incoming));
-				auto next_level_answer = string(current_incoming.begin(), current_incoming.begin() + read_bytes);
+				read_bytes = read(socket, buffer(current_incoming));
+				auto next_level_answer = string(current_incoming.begin(), current_incoming.begin() + numeric_cast<int>(read_bytes));
 				answer += next_level_answer;
 			}
 
@@ -122,7 +128,7 @@ struct dapi {
 	bool dummy_bootstrap = [this]{ do_read(); return !true; }();
 };
 
-int main(int argc, char *argv[]){
+int main(){
 	io_service io_service;
 	io_service::work work(io_service);
 
@@ -138,7 +144,7 @@ int main(int argc, char *argv[]){
 	connection.get();
 	BARK << "yay :D\n";
 
-	dapi api{io_service, socket};
+	rawdapi api{io_service, socket};
 
 	auto networks = api.write(R"({"get":"networks"})");
 	auto kassala_channels = api.write(R"({"get":"channels", "params":["kassala"]})");
