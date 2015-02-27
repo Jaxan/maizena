@@ -83,7 +83,7 @@ struct rawdapi {
 	}
 
 	void do_read(){
-		current_incoming.assign(1024, 0);
+		current_incoming.assign(5, 0);
 		async_read(socket, buffer(current_incoming), transfer_at_least(4), [this](auto ec, auto read_bytes){
 			if(ec){
 				abandon_ship();
